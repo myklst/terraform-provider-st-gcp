@@ -15,38 +15,37 @@ import (
 )
 
 var (
-	_ datasource.DataSource              = &BackendServicesDataSource{}
-	_ datasource.DataSourceWithConfigure = &BackendServicesDataSource{}
+	_ datasource.DataSource              = &LbBackendServicesDataSource{}
+	_ datasource.DataSourceWithConfigure = &LbBackendServicesDataSource{}
 )
 
-func NewDataSourceGoogleBackendServices() datasource.DataSource {
-	return &BackendServicesDataSource{}
-
+func NewLbBackendServicesDataSource() datasource.DataSource {
+	return &LbBackendServicesDataSource{}
 }
 
-type BackendServicesDataSource struct {
+type LbBackendServicesDataSource struct {
 	project string
 	client  *googleComputeClient.Service
 }
 
-type BackendServicesDataSourceModel struct {
+type LbBackendServicesDataSourceModel struct {
 	Name  types.String                `tfsdk:"name"`
 	Tags  types.Map                   `tfsdk:"tags"`
-	Items []*backendServicesItemModel `tfsdk:"items"`
+	Items []*lbBackendServicesItemModel `tfsdk:"items"`
 }
 
-type backendServicesItemModel struct {
+type lbBackendServicesItemModel struct {
 	Id   types.Int64 `tfsdk:"id"`
 	Tags types.Map   `tfsdk:"tags"`
 }
 
 // Metadata returns the data source backend services type name.
-func (d *BackendServicesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+func (d *LbBackendServicesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_load_balancer_backend_services"
 }
 
 // Schema defines the schema for the backend services data source .
-func (d *BackendServicesDataSource) Schema(_ context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+func (d *LbBackendServicesDataSource) Schema(_ context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "This data source provides the load balancer backend services on Google Cloud.",
 		Attributes: map[string]schema.Attribute{
@@ -81,7 +80,7 @@ func (d *BackendServicesDataSource) Schema(_ context.Context, req datasource.Sch
 }
 
 // Configure adds the provider configured client to the data source.
-func (d *BackendServicesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+func (d *LbBackendServicesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		return
 	}
@@ -91,8 +90,8 @@ func (d *BackendServicesDataSource) Configure(_ context.Context, req datasource.
 }
 
 // Read backend services data source information
-func (d *BackendServicesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	var plan *BackendServicesDataSourceModel
+func (d *LbBackendServicesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var plan *LbBackendServicesDataSourceModel
 	diags := req.Config.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
@@ -100,8 +99,8 @@ func (d *BackendServicesDataSource) Read(ctx context.Context, req datasource.Rea
 	}
 
 	// Initialize input into state
-	state := &BackendServicesDataSourceModel{}
-	state.Items = []*backendServicesItemModel{}
+	state := &LbBackendServicesDataSourceModel{}
+	state.Items = []*lbBackendServicesItemModel{}
 
 	// Get list of backend services
 	responseByList := d.client.BackendServices.List(d.project)
@@ -130,7 +129,7 @@ func (d *BackendServicesDataSource) Read(ctx context.Context, req datasource.Rea
 					}
 				}
 
-				serviceItem := &backendServicesItemModel{
+				serviceItem := &lbBackendServicesItemModel{
 					Id:   types.Int64Value(int64(backendService.Id)),
 					Tags: slbTagsTfType,
 				}

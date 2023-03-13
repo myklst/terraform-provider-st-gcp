@@ -207,7 +207,7 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 
 func (p *googleCloudProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewDataSourceGoogleBackendServices,
+		NewLbBackendServicesDataSource,
 	}
 }
 

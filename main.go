@@ -14,7 +14,7 @@ import (
 func main() {
 	providerAddress := os.Getenv("PROVIDER_LOCAL_PATH")
 	if providerAddress == "" {
-		providerAddress = "registry.terraform.io/styumyum/st-gcp"
+		providerAddress = "registry.terraform.io/myklst/st-gcp"
 	}
 	providerserver.Serve(context.Background(), gcp.New, providerserver.ServeOpts{
 		Address: providerAddress,

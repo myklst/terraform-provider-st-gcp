@@ -31,3 +31,5 @@ provider "st-gcp" {}
 
 - `credentials` (String, Sensitive) Either the path to or the contents of a service account key file in JSON format for Google Cloud API. May also be provided via GOOGLE_CREDENTIALS environment variable environment variable.
 - `project` (String) Project Name for Google Cloud API. May also be provided via GOOGLE_PROJECT environment variable.
+
+

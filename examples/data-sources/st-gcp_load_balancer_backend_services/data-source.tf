@@ -1,4 +1,4 @@
-data "st-gcp_backend_services" "def" {
+data "st-gcp_load_balancer_backend_services" "def" {
   name = "backend-service-name"
 
   tags = {

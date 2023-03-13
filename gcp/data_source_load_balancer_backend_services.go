@@ -42,7 +42,7 @@ type backendServicesItemModel struct {
 
 // Metadata returns the data source backend services type name.
 func (d *BackendServicesDataSource) Metadata(_ context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_backend_services"
+	resp.TypeName = req.ProviderTypeName + "_load_balancer_backend_services"
 }
 
 // Schema defines the schema for the backend services data source .

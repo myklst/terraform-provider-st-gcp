@@ -44,7 +44,7 @@ The reason behind every resources and data sources are stated as below:
 
 ### Data Sources
 
-- **st-gcp_backend_services**
+- **st-gcp_load_balancer_backend_services**
 
   The load balancer backend services on Google Cloud do not support tagging, therefore
   backend service's description is used as tags with the format

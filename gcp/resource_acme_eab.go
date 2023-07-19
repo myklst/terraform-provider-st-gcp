@@ -16,7 +16,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// gcpAcmeEabResource google cloud platform, get eab account for acme client
+// gcpAcmeEabResource google cloud platform, get eab credential for ACME client.
 type gcpAcmeEabResource struct {
 }
 
@@ -64,6 +64,7 @@ func (r *gcpAcmeEabResource) Create(ctx context.Context, req resource.CreateRequ
 		tflog.Error(ctx, "gcpAcmeEabResource req.Config.Get error")
 		return
 	}
+
 	keyID, b64MacKey, err := gcpGetEab(cfg.CredentialsJSON)
 	if err != nil {
 		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
@@ -79,14 +80,12 @@ func (r *gcpAcmeEabResource) Create(ctx context.Context, req resource.CreateRequ
 }
 
 func (r *gcpAcmeEabResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-
 }
 
 func (r *gcpAcmeEabResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 }
 
 func (r *gcpAcmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-
 }
 
 type gcloudCred struct {

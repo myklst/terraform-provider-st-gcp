@@ -212,5 +212,7 @@ func (p *googleCloudProvider) DataSources(_ context.Context) []func() datasource
 }
 
 func (p *googleCloudProvider) Resources(_ context.Context) []func() resource.Resource {
-	return nil
+	return []func() resource.Resource{
+		NewGcpAcmeEabResource,
+	}
 }

@@ -51,6 +51,16 @@ The reason behind every resources and data sources are stated as below:
   `TagKey1:TagValue1|TagKey2:TagValue2`, where the character `|` is used as string
   delimiter. Output will also convert description string to map if all are matched.
 
+### Resource
+
+- **st-gcp_eab**
+
+  To create eab account for acme protocol.
+  See: 
+   - [Google OAuth2 Doc](https://developers.google.com/identity/protocols/oauth2/service-account)
+   - [Google Public CA Doc](https://cloud.google.com/certificate-manager/docs/reference/rest/v1beta1/projects.locations.externalAccountKeys/create)
+   - [example: examples/resources/eab.tf](examples/resources/eab.tf)
+   - work with [Terraform ACME Certificate and Account Provider](https://registry.terraform.io/providers/vancluever/acme/latest/docs)
 
 References
 ----------

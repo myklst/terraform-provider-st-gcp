@@ -22,7 +22,7 @@ provider "st-gcp" {
   project     = "xxxx"
 }
 
-resource "st-gcp_eab" "eab" {
+resource "st-gcp_acme_eab" "eab" {
   credentials_json = file("projectid-6f5d9ed9a85d.json")
 }
 

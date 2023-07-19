@@ -25,7 +25,7 @@ func NewGcpAcmeEabResource() resource.Resource {
 }
 
 func (r *gcpAcmeEabResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
-	resp.TypeName = req.ProviderTypeName + "_eab"
+	resp.TypeName = req.ProviderTypeName + "_acme_eab"
 }
 
 func (r *gcpAcmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {

@@ -6,6 +6,3 @@ data "st-gcp_load_balancer_backend_services" "def" {
     app = "crond"
   }
 }
-
-
-

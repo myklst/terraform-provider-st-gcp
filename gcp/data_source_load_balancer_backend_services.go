@@ -29,8 +29,8 @@ type LbBackendServicesDataSource struct {
 }
 
 type LbBackendServicesDataSourceModel struct {
-	Name  types.String                `tfsdk:"name"`
-	Tags  types.Map                   `tfsdk:"tags"`
+	Name  types.String                  `tfsdk:"name"`
+	Tags  types.Map                     `tfsdk:"tags"`
 	Items []*lbBackendServicesItemModel `tfsdk:"items"`
 }
 

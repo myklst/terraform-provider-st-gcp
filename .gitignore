@@ -33,3 +33,4 @@ override.tf.json
 
 test/
 terraform-provider-st-gcp
+.DS_Store

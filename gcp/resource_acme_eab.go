@@ -18,31 +18,36 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-// gcpAcmeEabResource google cloud platform, get eab account for acme client
-type gcpAcmeEabResource struct {
+// acmeEabResource Present st-gcp_acme_eab resource
+type acmeEabResource struct {
+	client *gcpClients
 }
 
-func NewGcpAcmeEabResource() resource.Resource {
-	return &gcpAcmeEabResource{}
+type acmeEabState struct {
+	KeyID      types.String `tfsdk:"key_id"`
+	Name       types.String `tfsdk:"name"`
+	HmacBase64 types.String `tfsdk:"hmac_base64"`
+	CreateAt   types.Int64  `tfsdk:"create_at"` // the unix timestamp of create EAB credential
 }
 
-func (r *gcpAcmeEabResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+type externalAccountKeyResp struct {
+	Name      string `json:"name"`
+	KeyId     string `json:"keyId"`
+	B64MacKey string `json:"b64MacKey"`
+}
+
+func NewAcmeEabResource() resource.Resource {
+	return &acmeEabResource{}
+}
+
+func (r *acmeEabResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_acme_eab"
 }
 
-func (r *gcpAcmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+func (r *acmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "",
 		Attributes: map[string]schema.Attribute{
-			"credentials_json": &schema.StringAttribute{
-				Required:  true,
-				Optional:  false,
-				Sensitive: true,
-			},
-			"eab_account_expires_days": &schema.Int64Attribute{ // default is 60 days
-				Required: false,
-				Optional: true,
-			},
 			"name": &schema.StringAttribute{
 				Computed: true,
 			},
@@ -59,169 +64,123 @@ func (r *gcpAcmeEabResource) Schema(_ context.Context, req resource.SchemaReques
 	}
 }
 
-func (r *gcpAcmeEabResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+func (r *acmeEabResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		// this data available on apply stage
+		return
+	}
+	client, ok := req.ProviderData.(*gcpClients)
+	if !ok {
+		resp.Diagnostics.AddError("req.ProviderData not a gcpClients error", "")
+		return
+	}
+	r.client = client
 }
 
-type resourceConfigFormat struct {
-	CredentialsJSON       string       `tfsdk:"credentials_json"`
-	EabAccountExpiresDays int64        `tfsdk:"eab_account_expires_days"`
-	Name                  types.String `tfsdk:"name"`
-	KeyID                 types.String `tfsdk:"key_id"`
-	HmacBase64            types.String `tfsdk:"hmac_base64"`
-	CreateAt              types.Int64  `tfsdk:"create_at"` // the unix timestamp of create eab account
-}
-
-func (r *gcpAcmeEabResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var cfg resourceConfigFormat
-	d := req.Plan.Get(ctx, &cfg)
+func (r *acmeEabResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var state acmeEabState
+	d := req.Plan.Get(ctx, &state)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		tflog.Error(ctx, "Create req.Config.Get error")
 		return
 	}
-	eabResp, err := gcpGetEab(ctx, cfg.CredentialsJSON, nil)
-	if err != nil {
-		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
-			"error":            err.Error(),
-			"credentials_json": cfg.CredentialsJSON,
-		})
-		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
+
+	if err := createEabCred(ctx, &state, r.client.credentialsJSON, nil); err != nil {
+		resp.Diagnostics.AddError("createEabCred error", err.Error())
 		return
 	}
-	cfg.Name = basetypes.NewStringValue(eabResp.Name)
-	cfg.KeyID = basetypes.NewStringValue(eabResp.KeyId)
-	cfg.HmacBase64 = basetypes.NewStringValue(eabResp.B64MacKey)
-	cfg.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
-	resp.State.Set(ctx, &cfg)
+	resp.State.Set(ctx, &state)
 }
 
-func (r *gcpAcmeEabResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	var cfg resourceConfigFormat
-	d := req.State.Get(ctx, &cfg)
+func (r *acmeEabResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state acmeEabState
+	d := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		tflog.Error(ctx, "Read req.State.Get error")
 		return
 	}
+
 	eabData := externalAccountKeyResp{
-		Name:      cfg.Name.String(),
-		KeyId:     cfg.KeyID.String(),
-		B64MacKey: cfg.HmacBase64.String(),
+		Name:      state.Name.String(),
+		KeyId:     state.KeyID.String(),
+		B64MacKey: state.HmacBase64.String(),
 	}
 	if len(eabData.Name) == 0 || len(eabData.KeyId) == 0 || len(eabData.B64MacKey) == 0 {
-		tflog.Info(ctx, "account not create")
+		tflog.Info(ctx, "credential has not been created")
 		return
 	}
-	eabResp, err := gcpGetEab(ctx, cfg.CredentialsJSON, &eabData)
+	eabResp, err := createEabCred(ctx, &state, r.client.credentialsJSON, &eabData)
 	if err != nil {
-		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
+		tflog.Error(ctx, "createEabCred error", map[string]interface{}{
 			"error":            err.Error(),
-			"credentials_json": cfg.CredentialsJSON,
+			"credentials_json": string(r.client.credentialsJSON),
 		})
-		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
+		resp.Diagnostics.AddError("createEabCred error", err.Error())
 		return
 	}
-	if cfg.Name.String() == eabResp.Name &&
-		cfg.KeyID.String() == eabResp.KeyId &&
-		cfg.HmacBase64.String() == eabResp.B64MacKey {
-		tflog.Info(ctx, "account not change")
+
+	if state.Name.String() == eabResp.Name &&
+		state.KeyID.String() == eabResp.KeyId &&
+		state.HmacBase64.String() == eabResp.B64MacKey {
+		tflog.Info(ctx, "credential has no change")
 		return
 	}
-	cfg.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
-	cfg.Name = basetypes.NewStringValue(eabResp.Name)
-	cfg.KeyID = basetypes.NewStringValue(eabResp.KeyId)
-	cfg.HmacBase64 = basetypes.NewStringValue(eabResp.B64MacKey)
-	resp.State.Set(ctx, &cfg)
+
+	resp.State.Set(ctx, &state)
 }
 
-const defaultEabAccountExpiresDays = 60
-
-func (r *gcpAcmeEabResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var cfg resourceConfigFormat
-	d := req.State.Get(ctx, &cfg)
+func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var state acmeEabState
+	d := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
 		tflog.Error(ctx, "Update req.State.Get error")
 		return
 	}
-	if cfg.EabAccountExpiresDays <= 0 {
-		cfg.EabAccountExpiresDays = defaultEabAccountExpiresDays
-	}
-	createAt := cfg.CreateAt.ValueInt64()
-	if int64(time.Since(time.Unix(createAt, 0)).Hours()/24) < cfg.EabAccountExpiresDays {
-		tflog.Info(ctx, "eab account not expires")
-		var cfgReq resourceConfigFormat
-		d := req.Config.Get(ctx, &cfgReq)
-		resp.Diagnostics.Append(d...)
-		if resp.Diagnostics.HasError() {
-			tflog.Error(ctx, "Update req.Config.Get error")
-			return
-		}
-		cfg.CredentialsJSON = cfgReq.CredentialsJSON
-		cfg.EabAccountExpiresDays = cfgReq.EabAccountExpiresDays // must set to config value
-		// or error happend like this:
-		// When applying changes to st-gcp_acme_eab.eab, provider "provider[\"registry.terraform.io/myklst/st-gcp\"]"
-		// produced an unexpected new value: .eab_account_expires_days: was cty.NumberIntVal(2), but now cty.NumberIntVal(1).
-		resp.State.Set(ctx, &cfg)
-		return
-	}
+
 	eabData := externalAccountKeyResp{
-		Name:      cfg.Name.String(),
-		KeyId:     cfg.KeyID.String(),
-		B64MacKey: cfg.HmacBase64.String(),
+		Name:      state.Name.String(),
+		KeyId:     state.KeyID.String(),
+		B64MacKey: state.HmacBase64.String(),
 	}
-	eabResp, err := gcpGetEab(ctx, cfg.CredentialsJSON, &eabData)
-	if err != nil {
-		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
-			"error":            err.Error(),
-			"credentials_json": cfg.CredentialsJSON,
-		})
-		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
+	if err := createEabCred(ctx, &state, r.client.credentialsJSON, &eabData); err != nil {
+		resp.Diagnostics.AddError("createEabCred error", err.Error())
 		return
 	}
-	cfg.Name = basetypes.NewStringValue(eabResp.Name)
-	cfg.KeyID = basetypes.NewStringValue(eabResp.KeyId)
-	cfg.HmacBase64 = basetypes.NewStringValue(eabResp.B64MacKey)
-	cfg.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
-	resp.State.Set(ctx, &cfg)
+	resp.State.Set(ctx, &state)
 }
 
-func (r *gcpAcmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+func (r *acmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 
 }
 
-type gcloudCred struct {
-	Type                    string `json:"type"`
-	ProjectId               string `json:"project_id"`
-	PrivateKeyId            string `json:"private_key_id"`
-	PrivateKey              string `json:"private_key"`
-	ClientEmail             string `json:"client_email"`
-	ClientId                string `json:"client_id"`
-	AuthUri                 string `json:"auth_uri"`
-	TokenUri                string `json:"token_uri"`
-	AuthProviderX509CertUrl string `json:"auth_provider_x509_cert_url"`
-	ClientX509CertUrl       string `json:"client_x509_cert_url"`
-}
-
-type externalAccountKeyResp struct {
-	Name      string `json:"name"`
-	KeyId     string `json:"keyId"`
-	B64MacKey string `json:"b64MacKey"`
-}
-
-// gcpGetEab create a eab account
+// createEabCred Create a EAB credential.
 // see: https://cloud.google.com/certificate-manager/docs/reference/public-ca/rest/v1/projects.locations.externalAccountKeys/create
-func gcpGetEab(ctx context.Context, credentialsJSON string, old *externalAccountKeyResp) (*externalAccountKeyResp, error) {
-	ctx = tflog.NewSubsystem(ctx, "gcpGetEab")
-	cred := &gcloudCred{}
-	if err := json.Unmarshal([]byte(credentialsJSON), &cred); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal Google private key: %v", err)
+func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte, old *externalAccountKeyResp) error {
+	cred := &struct{
+		Type                    string `json:"type"`
+		ProjectId               string `json:"project_id"`
+		PrivateKeyId            string `json:"private_key_id"`
+		PrivateKey              string `json:"private_key"`
+		ClientEmail             string `json:"client_email"`
+		ClientId                string `json:"client_id"`
+		AuthUri                 string `json:"auth_uri"`
+		TokenUri                string `json:"token_uri"`
+		AuthProviderX509CertUrl string `json:"auth_provider_x509_cert_url"`
+		ClientX509CertUrl       string `json:"client_x509_cert_url"`
+	}{}
+	if err := json.Unmarshal(credentialsJSON, &cred); err != nil {
+		return fmt.Errorf("failed to unmarshal GCP credential JSON: %v", err)
 	}
+
 	url := "https://www.googleapis.com/auth/cloud-platform"
-	conf, err := google.JWTConfigFromJSON([]byte(credentialsJSON), url)
+	conf, err := google.JWTConfigFromJSON(credentialsJSON, url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate JWT config: %v", err)
+		return fmt.Errorf("failed to generate JWT config: %v", err)
 	}
+
 	var api = fmt.Sprintf("https://publicca.googleapis.com/v1beta1/projects/%s/locations/global/externalAccountKeys", cred.ProjectId)
 	var resp *http.Response
 	if old != nil {
@@ -232,25 +191,32 @@ func gcpGetEab(ctx context.Context, credentialsJSON string, old *externalAccount
 		resp, err = conf.Client(context.Background()).Post(api, "application/json", nil)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to request Google Public CA API: %v", err)
+		return fmt.Errorf("failed to request Google Public CA API: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
+		return fmt.Errorf("failed to read response body: %v", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("url:" + api + ", error:" + string(body))
+		return fmt.Errorf("url:" + api + ", error:" + string(body))
 	}
+
 	var eab externalAccountKeyResp
 	if err := json.Unmarshal(body, &eab); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal EAB response: %v", err)
+		return fmt.Errorf("failed to unmarshal EAB response: %v", err)
 	}
 	eabMacKey, err := base64.StdEncoding.DecodeString(eab.B64MacKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Base64 decode EAB MacKey: %v", err)
+		return fmt.Errorf("failed to base64-decode EAB B64MacKey: %v", err)
 	}
 	eab.B64MacKey = string(eabMacKey)
-	return &eab, nil
+
+	s.Name = basetypes.NewStringValue(eab.Name)
+	s.KeyID = basetypes.NewStringValue(eab.KeyId)
+	s.HmacBase64 = basetypes.NewStringValue(eab.B64MacKey)
+	s.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
+
+	return nil
 }

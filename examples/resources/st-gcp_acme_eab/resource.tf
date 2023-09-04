@@ -17,11 +17,11 @@ resource "st-gcp_acme_eab" "eab" {
 }
 
 output "eab_key_id" {
-  description = "The eab account of key id"
+  description = "The eab key id"
   value       = st-gcp_acme_eab.eab.key_id
 }
 
 output "eab_hmac_base64" {
-  description = "The eab account of hmac_base64"
+  description = "The eab credential with hmac_base64 format"
   value       = st-gcp_acme_eab.eab.hmac_base64
 }

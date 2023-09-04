@@ -32,5 +32,6 @@ override.tf.json
 # example: *tfplan*
 
 test/
+providers/
 terraform-provider-st-gcp
 .DS_Store

@@ -203,6 +203,8 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 	}
 
 	resp.DataSourceData = clients
+	// save credentialsContent
+	resp.ResourceData = credentialsContent
 }
 
 func (p *googleCloudProvider) DataSources(_ context.Context) []func() datasource.DataSource {
@@ -212,5 +214,7 @@ func (p *googleCloudProvider) DataSources(_ context.Context) []func() datasource
 }
 
 func (p *googleCloudProvider) Resources(_ context.Context) []func() resource.Resource {
-	return nil
+	return []func() resource.Resource{
+		NewGcpAcmeEabResource,
+	}
 }

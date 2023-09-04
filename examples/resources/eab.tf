@@ -17,7 +17,7 @@ provider "st-gcp" {
 }
 
 resource "st-gcp_acme_eab" "eab" {
-  credentials_json = file("projectid-6f5d9ed9a85d.json")
+
 }
 
 output "eab_key_id" {

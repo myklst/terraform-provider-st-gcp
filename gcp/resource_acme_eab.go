@@ -20,7 +20,7 @@ import (
 
 // gcpAcmeEabResource google cloud platform, get eab account for acme client
 type gcpAcmeEabResource struct {
-	credentialsJSON []byte
+	client *gcpClients
 }
 
 func NewGcpAcmeEabResource() resource.Resource {
@@ -35,10 +35,6 @@ func (r *gcpAcmeEabResource) Schema(_ context.Context, req resource.SchemaReques
 	resp.Schema = schema.Schema{
 		Description: "",
 		Attributes: map[string]schema.Attribute{
-			"eab_account_expires_days": &schema.Int64Attribute{ // default is 60 days
-				Required: false,
-				Optional: true,
-			},
 			"name": &schema.StringAttribute{
 				Computed: true,
 			},
@@ -60,20 +56,19 @@ func (r *gcpAcmeEabResource) Configure(ctx context.Context, req resource.Configu
 		// this data available on apply stage
 		return
 	}
-	j, ok := req.ProviderData.([]byte)
+	client, ok := req.ProviderData.(*gcpClients)
 	if !ok {
-		resp.Diagnostics.AddError("credentials_json format error", "")
+		resp.Diagnostics.AddError("req.ProviderData not a gcpClients error", "")
 		return
 	}
-	r.credentialsJSON = j
+	r.client = client
 }
 
 type resourceConfigFormat struct {
-	EabAccountExpiresDays int64        `tfsdk:"eab_account_expires_days"`
-	Name                  types.String `tfsdk:"name"`
-	KeyID                 types.String `tfsdk:"key_id"`
-	HmacBase64            types.String `tfsdk:"hmac_base64"`
-	CreateAt              types.Int64  `tfsdk:"create_at"` // the unix timestamp of create eab account
+	Name       types.String `tfsdk:"name"`
+	KeyID      types.String `tfsdk:"key_id"`
+	HmacBase64 types.String `tfsdk:"hmac_base64"`
+	CreateAt   types.Int64  `tfsdk:"create_at"` // the unix timestamp of create eab account
 }
 
 func (r *gcpAcmeEabResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -84,20 +79,28 @@ func (r *gcpAcmeEabResource) Create(ctx context.Context, req resource.CreateRequ
 		tflog.Error(ctx, "Create req.Config.Get error")
 		return
 	}
-	eabResp, err := gcpGetEab(ctx, r.credentialsJSON, nil)
+	err := create(ctx, &cfg, r.client.credentialsJSON, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
+		return
+	}
+	resp.State.Set(ctx, &cfg)
+}
+
+func create(ctx context.Context, cfg *resourceConfigFormat, credentialsJSON []byte, eabData *externalAccountKeyResp) error {
+	eabResp, err := gcpGetEab(ctx, credentialsJSON, eabData)
 	if err != nil {
 		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
 			"error":            err.Error(),
-			"credentials_json": string(r.credentialsJSON),
+			"credentials_json": string(credentialsJSON),
 		})
-		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
-		return
+		return err
 	}
 	cfg.Name = basetypes.NewStringValue(eabResp.Name)
 	cfg.KeyID = basetypes.NewStringValue(eabResp.KeyId)
 	cfg.HmacBase64 = basetypes.NewStringValue(eabResp.B64MacKey)
 	cfg.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
-	resp.State.Set(ctx, &cfg)
+	return nil
 }
 
 func (r *gcpAcmeEabResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -117,11 +120,11 @@ func (r *gcpAcmeEabResource) Read(ctx context.Context, req resource.ReadRequest,
 		tflog.Info(ctx, "account not create")
 		return
 	}
-	eabResp, err := gcpGetEab(ctx, r.credentialsJSON, &eabData)
+	eabResp, err := gcpGetEab(ctx, r.client.credentialsJSON, &eabData)
 	if err != nil {
 		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
 			"error":            err.Error(),
-			"credentials_json": string(r.credentialsJSON),
+			"credentials_json": string(r.client.credentialsJSON),
 		})
 		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
 		return
@@ -139,8 +142,6 @@ func (r *gcpAcmeEabResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.State.Set(ctx, &cfg)
 }
 
-const defaultEabAccountExpiresDays = 60
-
 func (r *gcpAcmeEabResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var cfg resourceConfigFormat
 	d := req.State.Get(ctx, &cfg)
@@ -149,44 +150,16 @@ func (r *gcpAcmeEabResource) Update(ctx context.Context, req resource.UpdateRequ
 		tflog.Error(ctx, "Update req.State.Get error")
 		return
 	}
-	if cfg.EabAccountExpiresDays <= 0 {
-		cfg.EabAccountExpiresDays = defaultEabAccountExpiresDays
-	}
-	createAt := cfg.CreateAt.ValueInt64()
-	if int64(time.Since(time.Unix(createAt, 0)).Hours()/24) < cfg.EabAccountExpiresDays {
-		tflog.Info(ctx, "eab account not expires")
-		var cfgReq resourceConfigFormat
-		d := req.Config.Get(ctx, &cfgReq)
-		resp.Diagnostics.Append(d...)
-		if resp.Diagnostics.HasError() {
-			tflog.Error(ctx, "Update req.Config.Get error")
-			return
-		}
-		cfg.EabAccountExpiresDays = cfgReq.EabAccountExpiresDays // must set to config value
-		// or error happend like this:
-		// When applying changes to st-gcp_acme_eab.eab, provider "provider[\"registry.terraform.io/myklst/st-gcp\"]"
-		// produced an unexpected new value: .eab_account_expires_days: was cty.NumberIntVal(2), but now cty.NumberIntVal(1).
-		resp.State.Set(ctx, &cfg)
-		return
-	}
 	eabData := externalAccountKeyResp{
 		Name:      cfg.Name.String(),
 		KeyId:     cfg.KeyID.String(),
 		B64MacKey: cfg.HmacBase64.String(),
 	}
-	eabResp, err := gcpGetEab(ctx, r.credentialsJSON, &eabData)
+	err := create(ctx, &cfg, r.client.credentialsJSON, &eabData)
 	if err != nil {
-		tflog.Error(ctx, "gcpGetEab error", map[string]interface{}{
-			"error":            err.Error(),
-			"credentials_json": string(r.credentialsJSON),
-		})
 		resp.Diagnostics.AddError("gcpGetEab error", err.Error())
 		return
 	}
-	cfg.Name = basetypes.NewStringValue(eabResp.Name)
-	cfg.KeyID = basetypes.NewStringValue(eabResp.KeyId)
-	cfg.HmacBase64 = basetypes.NewStringValue(eabResp.B64MacKey)
-	cfg.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
 	resp.State.Set(ctx, &cfg)
 }
 

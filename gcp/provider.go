@@ -17,8 +17,9 @@ import (
 )
 
 type gcpClients struct {
-	project       string
-	computeClient *googleComputeClient.Service
+	project         string
+	credentialsJSON []byte
+	computeClient   *googleComputeClient.Service
 }
 
 // Ensure the implementation satisfies the expected interfaces
@@ -199,12 +200,12 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 
 	clients := gcpClients{
 		project:       project,
+		credentialsJSON: credentialsContent,
 		computeClient: computeService,
 	}
 
 	resp.DataSourceData = clients
-	// save credentialsContent
-	resp.ResourceData = credentialsContent
+	resp.ResourceData = &clients
 }
 
 func (p *googleCloudProvider) DataSources(_ context.Context) []func() datasource.DataSource {

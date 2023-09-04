@@ -1,9 +1,5 @@
 terraform {
   required_providers {
-    # acme = {
-    #   source  = "vancluever/acme"
-    #   version = "2.15.1"
-    # }
     st-gcp = {
       source  = "myklst/st-gcp"
       version = "0.1.1"

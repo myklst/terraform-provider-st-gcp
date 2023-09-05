@@ -101,33 +101,16 @@ func (r *acmeEabResource) Read(ctx context.Context, req resource.ReadRequest, re
 		tflog.Error(ctx, "Read req.State.Get error")
 		return
 	}
-
 	eabData := externalAccountKeyResp{
 		Name:      state.Name.String(),
 		KeyId:     state.KeyID.String(),
 		B64MacKey: state.HmacBase64.String(),
 	}
 	if len(eabData.Name) == 0 || len(eabData.KeyId) == 0 || len(eabData.B64MacKey) == 0 {
-		tflog.Info(ctx, "credential has not been created")
+		tflog.Error(ctx, "credential has not been created")
+		resp.Diagnostics.AddError("credential data empty", "credential has not been created")
 		return
 	}
-	eabResp, err := createEabCred(ctx, &state, r.client.credentialsJSON, &eabData)
-	if err != nil {
-		tflog.Error(ctx, "createEabCred error", map[string]interface{}{
-			"error":            err.Error(),
-			"credentials_json": string(r.client.credentialsJSON),
-		})
-		resp.Diagnostics.AddError("createEabCred error", err.Error())
-		return
-	}
-
-	if state.Name.String() == eabResp.Name &&
-		state.KeyID.String() == eabResp.KeyId &&
-		state.HmacBase64.String() == eabResp.B64MacKey {
-		tflog.Info(ctx, "credential has no change")
-		return
-	}
-
 	resp.State.Set(ctx, &state)
 }
 
@@ -153,13 +136,15 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *acmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-
+	// gcp acme eab api not support delete open api
+	// so delete state only at here
+	resp.State.RemoveResource(ctx)
 }
 
 // createEabCred Create a EAB credential.
 // see: https://cloud.google.com/certificate-manager/docs/reference/public-ca/rest/v1/projects.locations.externalAccountKeys/create
 func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte, old *externalAccountKeyResp) error {
-	cred := &struct{
+	cred := &struct {
 		Type                    string `json:"type"`
 		ProjectId               string `json:"project_id"`
 		PrivateKeyId            string `json:"private_key_id"`

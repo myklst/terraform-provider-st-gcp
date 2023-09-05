@@ -13,7 +13,7 @@ provider "st-gcp" {
 }
 
 resource "st-gcp_acme_eab" "eab" {
-  eab_account_expires_days = 60
+
 }
 
 output "eab_key_id" {

@@ -101,6 +101,7 @@ func (r *acmeEabResource) Read(ctx context.Context, req resource.ReadRequest, re
 		tflog.Error(ctx, "Read req.State.Get error")
 		return
 	}
+
 	eabData := externalAccountKeyResp{
 		Name:      state.Name.String(),
 		KeyId:     state.KeyID.String(),
@@ -136,9 +137,7 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *acmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// gcp acme eab api not support delete open api
-	// so delete state only at here
-	resp.State.RemoveResource(ctx)
+	// Since GCP does not provide an API to delete EAB credential, the delete function will not be implemented.
 }
 
 // createEabCred Create a EAB credential.

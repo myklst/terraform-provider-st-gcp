@@ -176,53 +176,40 @@ func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte,
 	var api = fmt.Sprintf(
 		"https://publicca.googleapis.com/v1beta1/projects/%s/locations/global/externalAccountKeys",
 		cred.ProjectID)
-	var resp *http.Response
 	var postData *bytes.Reader
 	if old != nil {
 		old.B64MacKey = base64.StdEncoding.Strict().EncodeToString([]byte(old.B64MacKey))
 		buf, _ := json.Marshal(old)
 		postData = bytes.NewReader(buf)
 	}
-	//sleepMs := retrySleepMs
-	retry := 0
-	for {
-		requestFunc := func() error {
-			if retry >= maxRetryTimes {
-				return &backoff.PermanentError{Err: fmt.Errorf("retry times reach limit")}
-			}
-			if old != nil {
-				resp, err = conf.Client(context.Background()).Post(api, "application/json", postData)
-			} else {
-				resp, err = conf.Client(context.Background()).Post(api, "application/json", nil)
-			}
-			if err != nil {
-				tflog.Warn(ctx, "post data error:"+err.Error())
-				errMsg := err.Error()
-				if strings.Contains(errMsg, "timeout") ||
-					strings.Contains(errMsg, " 500 ") ||
-					strings.Contains(errMsg, " 504 ") ||
-					strings.Contains(errMsg, "DNS") {
-					retry++
-					return err
-				}
-				return &backoff.PermanentError{Err: err}
-			}
-			return nil
+
+	var resp *http.Response
+	requestFunc := func() error {
+		if old != nil {
+			resp, err = conf.Client(context.Background()).Post(api, "application/json", postData)
+		} else {
+			resp, err = conf.Client(context.Background()).Post(api, "application/json", nil)
 		}
-		retryErr := backoff.Retry(requestFunc, backoff.NewExponentialBackOff())
-		if retryErr != nil {
-			if e, ok := retryErr.(*backoff.PermanentError); ok {
-				err = e.Err
-				break
+		defer resp.Body.Close()
+
+		if err != nil {
+			errMsg := err.Error()
+			tflog.Warn(ctx, "Failed to request API", map[string]interface{}{
+				"error": errMsg,
+			})
+			if strings.Contains(errMsg, "timeout") ||
+				strings.Contains(errMsg, " 500 ") ||
+				strings.Contains(errMsg, " 504 ") ||
+				strings.Contains(errMsg, "DNS") {
+				return err
 			}
-			continue
+			return &backoff.PermanentError{Err: err}
 		}
-		break
+		return nil
 	}
-	if err != nil {
+	if err := backoff.Retry(requestFunc, backoff.NewExponentialBackOff()); err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

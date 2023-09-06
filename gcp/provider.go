@@ -60,7 +60,9 @@ func (p *googleCloudProvider) Schema(_ context.Context, _ provider.SchemaRequest
 				Description: "Either the path to or the contents of a service account " +
 					"key file in JSON format for Google Cloud API. May also be " +
 					"provided via GOOGLE_CREDENTIALS environment variable environment " +
-					"variable.",
+					"variable, or generate a service account key file and set the " +
+					"GOOGLE_APPLICATION_CREDENTIALS environment variable to the " +
+					"path of the JSON file.",
 				Optional:  true,
 				Sensitive: true,
 			},
@@ -162,7 +164,7 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 		reference:
 		- https://github.com/hashicorp/terraform-provider-google/blob/80f6dd2fcc1c209ed2b066d9b758db2e34145368/google/path_or_contents.go
 	*/
-	var credentialsAbsPath string
+	credentialsAbsPath := credentials
 	var err error
 	if credentials[0:1] == "~" {
 		credentialsAbsPath, err = homedir.Expand(credentials)

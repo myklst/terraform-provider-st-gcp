@@ -87,7 +87,7 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 	}
 	// Default values to environment variables, but override
 	// with Terraform configuration value if set.
-	var project, credentials string
+	var project, credential string
 	if !config.Project.IsNull() {
 		project = config.Project.ValueString()
 	} else {
@@ -95,40 +95,23 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 	}
 
 	if !config.Credentials.IsNull() {
-		credentials = config.Credentials.ValueString()
+		credential = config.Credentials.ValueString()
 	} else {
-		credentials = os.Getenv("GOOGLE_CREDENTIALS")
-		if credentials == "" {
-			credentials = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		credential = os.Getenv("GOOGLE_CREDENTIALS")
+		if credential == "" {
+			credential = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 		}
 	}
+
 	// If any of the expected configuration are missing, return
 	// errors with provider-specific guidance.
-	p.checkField(project, resp, credentials)
-
+	p.checkField(project, resp, credential)
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	/*
-		Check whether the credentials is a file as it support either the path to
-		or the contents of a service account key file in JSON format.
-		reference:
-		- https://github.com/hashicorp/terraform-provider-google/blob/80f6dd2fcc1c209ed2b066d9b758db2e34145368/google/path_or_contents.go
-	*/
-	var credentialsAbsPath string
-	var err error
-	if credentials[0:1] == "~" {
-		credentialsAbsPath, err = homedir.Expand(credentials)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"[INTERNAL ERROR] Failed to expand homedir of credentials file",
-				err.Error(),
-			)
-			return
-		}
-	}
+
 	// if this is a path and we can stat it, assume it's file
-	credentialsContent := p.loadFromFile(credentialsAbsPath, resp, credentials)
+	credentialsContent := p.loadFromFile(resp, credential)
 	if credentialsContent == nil {
 		return
 	}
@@ -153,12 +136,30 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 	resp.ResourceData = &clients
 }
 
-func (*googleCloudProvider) loadFromFile(credentialsAbsPath string,
-	resp *provider.ConfigureResponse, credentials string) []byte {
-	var credentialsContent []byte
-	_, err := os.Stat(credentialsAbsPath)
-	if err == nil {
-		credentialsContent, err = os.ReadFile(credentialsAbsPath)
+// nolint:lll
+func (*googleCloudProvider) loadFromFile(resp *provider.ConfigureResponse, credential string) []byte {
+	/*
+		Check whether the credentials is a file as it support either the path to
+		or the contents of a service account key file in JSON format.
+		reference:
+		- https://github.com/hashicorp/terraform-provider-google/blob/80f6dd2fcc1c209ed2b066d9b758db2e34145368/google/path_or_contents.go
+	*/
+	credentialAbsPath := credential
+	if credential[0:1] == "~" {
+		var err error
+		credentialAbsPath, err = homedir.Expand(credential)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"[INTERNAL ERROR] Failed to expand homedir of credentials file",
+				err.Error(),
+			)
+			return nil
+		}
+	}
+
+	var credentialContent []byte
+	if _, err := os.Stat(credentialAbsPath); err == nil {
+		credentialContent, err = os.ReadFile(credentialAbsPath)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"[INTERNAL ERROR] Failed to read credentials file",
@@ -167,9 +168,9 @@ func (*googleCloudProvider) loadFromFile(credentialsAbsPath string,
 			return nil
 		}
 	} else {
-		credentialsContent = []byte(credentials)
+		credentialContent = []byte(credential)
 	}
-	return credentialsContent
+	return credentialContent
 }
 
 func (*googleCloudProvider) checkField(project string, resp *provider.ConfigureResponse, credentials string) {

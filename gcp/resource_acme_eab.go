@@ -51,19 +51,19 @@ func (r *acmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, 
 		Attributes: map[string]schema.Attribute{
 			"key_id": &schema.StringAttribute{
 				Description: "EAB key ID.",
-				Computed: true,
+				Computed:    true,
 			},
 			"name": &schema.StringAttribute{
 				Description: "EAB name.",
-				Computed: true,
+				Computed:    true,
 			},
 			"hmac_base64": &schema.StringAttribute{
 				Description: "EAB credential with hmac_base64 format.",
-				Computed: true,
+				Computed:    true,
 			},
 			"create_at": &schema.Int64Attribute{
 				Description: "EAB create timestamp.",
-				Computed: true,
+				Computed:    true,
 			},
 		},
 	}

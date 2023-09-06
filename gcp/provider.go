@@ -199,9 +199,9 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 	}
 
 	clients := gcpClients{
-		project:       project,
+		project:         project,
 		credentialsJSON: credentialsContent,
-		computeClient: computeService,
+		computeClient:   computeService,
 	}
 
 	resp.DataSourceData = &clients

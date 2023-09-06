@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -182,26 +183,39 @@ func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte,
 		buf, _ := json.Marshal(old)
 		postData = bytes.NewReader(buf)
 	}
-	sleepMs := retrySleepMs
+	//sleepMs := retrySleepMs
 	retry := 0
-	for ; retry < maxRetryTimes; retry++ {
-		if old != nil {
-			resp, err = conf.Client(context.Background()).Post(api, "application/json", postData)
-		} else {
-			resp, err = conf.Client(context.Background()).Post(api, "application/json", nil)
-		}
-		if err != nil {
-			tflog.Warn(ctx, "post data error:"+err.Error())
-			errMsg := err.Error()
-			if strings.Contains(errMsg, "timeout") ||
-				strings.Contains(errMsg, " 500 ") ||
-				strings.Contains(errMsg, " 504 ") ||
-				strings.Contains(errMsg, "DNS") {
-				time.Sleep(time.Duration(sleepMs) * time.Millisecond)
-				sleepMs *= 2
-				continue
+	for {
+		requestFunc := func() error {
+			if retry >= maxRetryTimes {
+				return &backoff.PermanentError{Err: fmt.Errorf("retry times reach limit")}
 			}
-			break
+			if old != nil {
+				resp, err = conf.Client(context.Background()).Post(api, "application/json", postData)
+			} else {
+				resp, err = conf.Client(context.Background()).Post(api, "application/json", nil)
+			}
+			if err != nil {
+				tflog.Warn(ctx, "post data error:"+err.Error())
+				errMsg := err.Error()
+				if strings.Contains(errMsg, "timeout") ||
+					strings.Contains(errMsg, " 500 ") ||
+					strings.Contains(errMsg, " 504 ") ||
+					strings.Contains(errMsg, "DNS") {
+					retry++
+					return err
+				}
+				return &backoff.PermanentError{Err: err}
+			}
+			return nil
+		}
+		retryErr := backoff.Retry(requestFunc, backoff.NewExponentialBackOff())
+		if retryErr != nil {
+			if e, ok := retryErr.(*backoff.PermanentError); ok {
+				err = e.Err
+				break
+			}
+			continue
 		}
 		break
 	}

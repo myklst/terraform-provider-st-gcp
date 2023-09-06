@@ -32,20 +32,23 @@ type acmeEabState struct {
 }
 
 type externalAccountKeyResp struct {
-	KeyId     string `json:"keyId"`
+	KeyID     string `json:"keyId"`
 	Name      string `json:"name"`
 	B64MacKey string `json:"b64MacKey"`
 }
 
+// NewAcmeEabResource
 func NewAcmeEabResource() resource.Resource {
 	return &acmeEabResource{}
 }
 
+// Metadata
 func (r *acmeEabResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_acme_eab"
 }
 
-func (r *acmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+// Schema
+func (r *acmeEabResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Request EAB credential for ACME.",
 		Attributes: map[string]schema.Attribute{
@@ -69,7 +72,9 @@ func (r *acmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, 
 	}
 }
 
-func (r *acmeEabResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+// Configure
+func (r *acmeEabResource) Configure(_ context.Context,
+	req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData == nil {
 		// this data available on apply stage
 		return
@@ -82,6 +87,7 @@ func (r *acmeEabResource) Configure(ctx context.Context, req resource.ConfigureR
 	r.client = client
 }
 
+// Create
 func (r *acmeEabResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var state acmeEabState
 	d := req.Plan.Get(ctx, &state)
@@ -98,10 +104,12 @@ func (r *acmeEabResource) Create(ctx context.Context, req resource.CreateRequest
 	resp.State.Set(ctx, &state)
 }
 
-func (r *acmeEabResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+// Read
+func (r *acmeEabResource) Read(_ context.Context, _ resource.ReadRequest, _ *resource.ReadResponse) {
 	// Since GCP does not provide an API to get EAB credential, the Read function will not be implemented.
 }
 
+// Update
 func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var state acmeEabState
 	d := req.State.Get(ctx, &state)
@@ -112,7 +120,7 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	eabData := externalAccountKeyResp{
-		KeyId:     state.KeyID.String(),
+		KeyID:     state.KeyID.String(),
 		Name:      state.Name.String(),
 		B64MacKey: state.HmacBase64.String(),
 	}
@@ -123,7 +131,8 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 	resp.State.Set(ctx, &state)
 }
 
-func (r *acmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+// Delete
+func (r *acmeEabResource) Delete(_ context.Context, _ resource.DeleteRequest, resp *resource.DeleteResponse) {
 	resp.Diagnostics.AddWarning(
 		"[Warning] Delete function will do nothing",
 		"Since GCP does not provide an API to delete EAB credential, the Delete function will not be implemented.",
@@ -135,21 +144,24 @@ const (
 	retrySleepMs  = 500
 )
 
+type credentialsGcp struct {
+	Type                    string `json:"type"`
+	ProjectID               string `json:"project_id"`
+	PrivateKeyID            string `json:"private_key_id"`
+	PrivateKey              string `json:"private_key"`
+	ClientEmail             string `json:"client_email"`
+	ClientID                string `json:"client_id"`
+	AuthURI                 string `json:"auth_uri"`
+	TokenURI                string `json:"token_uri"`
+	AuthProviderX509CertURL string `json:"auth_provider_x509_cert_url"`
+	ClientX509CertURL       string `json:"client_x509_cert_url"`
+}
+
 // createEabCred Create a EAB credential.
+// nolint:lll
 // see: https://cloud.google.com/certificate-manager/docs/reference/public-ca/rest/v1/projects.locations.externalAccountKeys/create
 func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte, old *externalAccountKeyResp) error {
-	cred := &struct {
-		Type                    string `json:"type"`
-		ProjectId               string `json:"project_id"`
-		PrivateKeyId            string `json:"private_key_id"`
-		PrivateKey              string `json:"private_key"`
-		ClientEmail             string `json:"client_email"`
-		ClientId                string `json:"client_id"`
-		AuthUri                 string `json:"auth_uri"`
-		TokenUri                string `json:"token_uri"`
-		AuthProviderX509CertUrl string `json:"auth_provider_x509_cert_url"`
-		ClientX509CertUrl       string `json:"client_x509_cert_url"`
-	}{}
+	cred := &credentialsGcp{}
 	if err := json.Unmarshal(credentialsJSON, &cred); err != nil {
 		return fmt.Errorf("failed to unmarshal GCP credential JSON: %v", err)
 	}
@@ -160,7 +172,9 @@ func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte,
 		return fmt.Errorf("failed to generate JWT config: %v", err)
 	}
 
-	var api = fmt.Sprintf("https://publicca.googleapis.com/v1beta1/projects/%s/locations/global/externalAccountKeys", cred.ProjectId)
+	var api = fmt.Sprintf(
+		"https://publicca.googleapis.com/v1beta1/projects/%s/locations/global/externalAccountKeys",
+		cred.ProjectID)
 	var resp *http.Response
 	var postData *bytes.Reader
 	if old != nil {
@@ -205,7 +219,7 @@ func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte,
 	}
 
 	var eab externalAccountKeyResp
-	if err := json.Unmarshal(body, &eab); err != nil {
+	if err = json.Unmarshal(body, &eab); err != nil {
 		return fmt.Errorf("failed to unmarshal EAB response: %v", err)
 	}
 	eabMacKey, err := base64.StdEncoding.DecodeString(eab.B64MacKey)
@@ -214,7 +228,7 @@ func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte,
 	}
 	eab.B64MacKey = string(eabMacKey)
 
-	s.KeyID = basetypes.NewStringValue(eab.KeyId)
+	s.KeyID = basetypes.NewStringValue(eab.KeyID)
 	s.Name = basetypes.NewStringValue(eab.Name)
 	s.HmacBase64 = basetypes.NewStringValue(eab.B64MacKey)
 	s.CreateAt = basetypes.NewInt64Value(time.Now().Unix())

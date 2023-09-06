@@ -32,8 +32,8 @@ type acmeEabState struct {
 }
 
 type externalAccountKeyResp struct {
-	Name      string `json:"name"`
 	KeyId     string `json:"keyId"`
+	Name      string `json:"name"`
 	B64MacKey string `json:"b64MacKey"`
 }
 
@@ -49,10 +49,10 @@ func (r *acmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "",
 		Attributes: map[string]schema.Attribute{
-			"name": &schema.StringAttribute{
+			"key_id": &schema.StringAttribute{
 				Computed: true,
 			},
-			"key_id": &schema.StringAttribute{
+			"name": &schema.StringAttribute{
 				Computed: true,
 			},
 			"hmac_base64": &schema.StringAttribute{
@@ -83,7 +83,7 @@ func (r *acmeEabResource) Create(ctx context.Context, req resource.CreateRequest
 	d := req.Plan.Get(ctx, &state)
 	resp.Diagnostics.Append(d...)
 	if resp.Diagnostics.HasError() {
-		tflog.Error(ctx, "Create req.Config.Get error")
+		tflog.Error(ctx, "Create req.Plan.Get error")
 		return
 	}
 
@@ -95,8 +95,7 @@ func (r *acmeEabResource) Create(ctx context.Context, req resource.CreateRequest
 }
 
 func (r *acmeEabResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
-	// gcp acme eab api not support get open api
-	// and tf framework will auto read state
+	// Since GCP does not provide an API to get EAB credential, the Read function will not be implemented.
 }
 
 func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
@@ -109,8 +108,8 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	eabData := externalAccountKeyResp{
-		Name:      state.Name.String(),
 		KeyId:     state.KeyID.String(),
+		Name:      state.Name.String(),
 		B64MacKey: state.HmacBase64.String(),
 	}
 	if err := createEabCred(ctx, &state, r.client.credentialsJSON, &eabData); err != nil {
@@ -121,7 +120,7 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *acmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Since GCP does not provide an API to delete EAB credential, the delete function will not be implemented.
+	// Since GCP does not provide an API to delete EAB credential, the Delete function will not be implemented.
 }
 
 const (
@@ -208,8 +207,8 @@ func createEabCred(ctx context.Context, s *acmeEabState, credentialsJSON []byte,
 	}
 	eab.B64MacKey = string(eabMacKey)
 
-	s.Name = basetypes.NewStringValue(eab.Name)
 	s.KeyID = basetypes.NewStringValue(eab.KeyId)
+	s.Name = basetypes.NewStringValue(eab.Name)
 	s.HmacBase64 = basetypes.NewStringValue(eab.B64MacKey)
 	s.CreateAt = basetypes.NewInt64Value(time.Now().Unix())
 

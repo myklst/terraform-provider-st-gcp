@@ -1,16 +1,13 @@
 terraform {
   required_providers {
     st-gcp = {
-      source  = "myklst/st-gcp"
-      version = "0.1.1"
+      source  = "example.local/myklst/st-gcp"
+      version = "~> 0.1"
     }
   }
 }
 
-provider "st-gcp" {
-  project     = "xxxx"
-  credentials = file("projectid-6f5d9ed9a85d.json")
-}
+provider "st-gcp" {}
 
 resource "st-gcp_acme_eab" "eab" {
 }

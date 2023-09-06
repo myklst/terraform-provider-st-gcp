@@ -47,7 +47,7 @@ func (r *acmeEabResource) Metadata(_ context.Context, req resource.MetadataReque
 
 func (r *acmeEabResource) Schema(_ context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "",
+		Description: "Request EAB credential for ACME.",
 		Attributes: map[string]schema.Attribute{
 			"key_id": &schema.StringAttribute{
 				Description: "EAB key ID.",

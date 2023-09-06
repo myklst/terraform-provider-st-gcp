@@ -97,7 +97,9 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 			"The provider cannot create the Google Cloud API client as there is "+
 				"an unknown configuration value for the Google Cloud credentials. "+
 				"Set the value statically in the configuration, or use the GOOGLE_CREDENTIALS "+
-				"environment variable.",
+				"environment variable. Addtionally, generate a service account key "+
+				"file and set the GOOGLE_APPLICATION_CREDENTIALS environment variable "+
+				"to the path of the JSON file.",
 		)
 	}
 
@@ -118,6 +120,9 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 		credentials = config.Credentials.ValueString()
 	} else {
 		credentials = os.Getenv("GOOGLE_CREDENTIALS")
+	    if credentials == "" {
+			credentials = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		}
 	}
 
 	// If any of the expected configuration are missing, return
@@ -199,9 +204,9 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 	}
 
 	clients := gcpClients{
-		project:       project,
+		project:         project,
 		credentialsJSON: credentialsContent,
-		computeClient: computeService,
+		computeClient:   computeService,
 	}
 
 	resp.DataSourceData = &clients

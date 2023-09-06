@@ -111,8 +111,8 @@ func (d *LbBackendServicesDataSource) Configure(_ context.Context, req datasourc
 		return
 	}
 
-	d.project = req.ProviderData.(gcpClients).project
-	d.client = req.ProviderData.(gcpClients).computeClient
+	d.project = req.ProviderData.(*gcpClients).project
+	d.client = req.ProviderData.(*gcpClients).computeClient
 }
 
 // Read backend services data source information

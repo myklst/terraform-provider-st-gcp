@@ -120,7 +120,10 @@ func (r *acmeEabResource) Update(ctx context.Context, req resource.UpdateRequest
 }
 
 func (r *acmeEabResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	// Since GCP does not provide an API to delete EAB credential, the Delete function will not be implemented.
+	resp.Diagnostics.AddWarning(
+		"[Warning] Delete function will do nothing",
+		"Since GCP does not provide an API to delete EAB credential, the Delete function will not be implemented.",
+	)
 }
 
 const (

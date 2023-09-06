@@ -120,7 +120,7 @@ func (p *googleCloudProvider) Configure(ctx context.Context, req provider.Config
 		credentials = config.Credentials.ValueString()
 	} else {
 		credentials = os.Getenv("GOOGLE_CREDENTIALS")
-	    if credentials == "" {
+		if credentials == "" {
 			credentials = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 		}
 	}
